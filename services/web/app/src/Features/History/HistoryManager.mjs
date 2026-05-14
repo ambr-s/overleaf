@@ -7,6 +7,7 @@ import {
 } from '@overleaf/fetch-utils'
 import fs from 'node:fs'
 import settings from '@overleaf/settings'
+import R2BlobPresigner from './R2BlobPresigner.mjs'
 import OError from '@overleaf/o-error'
 import UserGetter from '../User/UserGetter.mjs'
 import ProjectGetter from '../Project/ProjectGetter.mjs'
@@ -35,12 +36,20 @@ async function loadGlobalBlobs() {
 
 // END copy from services/history-v1/storage/lib/blob_store/index.js
 
-function getFilestoreBlobURL(historyId, hash) {
+async function getFilestoreBlobURL(historyId, hash) {
+  // clsi-rs: when filestore is on R2 (S3 backend), bypass the in-cluster
+  // filestore proxy and presign a direct R2 URL so a CLSI worker outside the
+  // VM (e.g. on Cloudflare Containers) can fetch the blob over the public net.
+  if (settings.filestore?.backend === 's3') {
+    if (GLOBAL_BLOBS.has(hash)) {
+      return await R2BlobPresigner.presignGlobalBlob(hash)
+    }
+    return await R2BlobPresigner.presignProjectBlob(historyId, hash)
+  }
   if (GLOBAL_BLOBS.has(hash)) {
     return `${settings.apis.filestore.url}/history/global/hash/${hash}`
-  } else {
-    return `${settings.apis.filestore.url}/history/project/${historyId}/hash/${hash}`
   }
+  return `${settings.apis.filestore.url}/history/project/${historyId}/hash/${hash}`
 }
 
 async function initializeProject(projectId) {

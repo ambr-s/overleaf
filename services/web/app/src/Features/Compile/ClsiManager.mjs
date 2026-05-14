@@ -689,7 +689,7 @@ async function _buildRequest(projectId, options) {
     // see if we can send an incremental update to the CLSI
     if (docUpdaterDocs != null && options.syncType !== 'full') {
       Metrics.inc('compile-from-redis')
-      return _buildRequestFromDocupdater(
+      return await _buildRequestFromDocupdater(
         projectId,
         options,
         project,
@@ -710,7 +710,7 @@ async function _buildRequest(projectId, options) {
     const timer = new Metrics.Timer('editor.compile-getdocs-mongo')
     const { docs, files } = await _getContentFromMongo(projectId)
     timer.done()
-    return _finaliseRequest(projectId, options, project, docs, files)
+    return await _finaliseRequest(projectId, options, project, docs, files)
   }
 }
 
@@ -756,7 +756,7 @@ async function getOutputFileStream(
   }
 }
 
-function _buildRequestFromDocupdater(
+async function _buildRequestFromDocupdater(
   projectId,
   options,
   project,
@@ -785,7 +785,7 @@ function _buildRequestFromDocupdater(
       }
     }
   }
-  return _finaliseRequest(projectId, options, project, docs, [])
+  return await _finaliseRequest(projectId, options, project, docs, [])
 }
 
 async function _buildRequestFromMongo(
@@ -800,7 +800,7 @@ async function _buildRequestFromMongo(
     syncType: 'full',
     syncState: projectStateHash,
   }
-  return _finaliseRequest(projectId, options, project, docs, files)
+  return await _finaliseRequest(projectId, options, project, docs, files)
 }
 
 async function _getContentFromMongo(projectId) {
@@ -810,7 +810,7 @@ async function _getContentFromMongo(projectId) {
   return { docs, files }
 }
 
-function _finaliseRequest(projectId, options, project, docs, files) {
+async function _finaliseRequest(projectId, options, project, docs, files) {
   const resources = []
   let flags
   let rootResourcePath = null
@@ -872,7 +872,7 @@ function _finaliseRequest(projectId, options, project, docs, files) {
     path = path.replace(/^\//, '') // Remove leading /
     resources.push({
       path,
-      url: HistoryManager.getFilestoreBlobURL(historyId, file.hash),
+      url: await HistoryManager.getFilestoreBlobURL(historyId, file.hash),
       modified: file.created?.getTime(),
     })
   }
