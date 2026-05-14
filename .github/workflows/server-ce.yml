@@ -1,9 +1,10 @@
-# Builds the server-ce (sharelatex monolith) image from this fork and pushes
-# to GHCR. The same image is then pulled by our prod compose to run the
-# patched Overleaf web with the R2 + clsi-rs integration.
+# Build the server-ce (sharelatex monolith) image from this fork and push to
+# GHCR. We use upstream's published sharelatex/sharelatex-base:6.1.0 as the
+# base — none of our patches touch the base layer (texlive/nginx/runit/etc.),
+# so building it ourselves is wasted minutes + storage.
 #
-# Runner: Blacksmith (configured org-level). Larger runner because the build
-# does an npm install across the whole monorepo (~3000 packages).
+# Runner: Blacksmith (configured org-level). The npm install across the
+# monorepo is the slow part; CPU-heavier runner = faster.
 
 name: build-server-ce
 
@@ -16,11 +17,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Renamed from overleaf-base/overleaf to dodge a GHCR blob-permission tangle:
-  # blobs from orphan packages (deleted but still referenced by GHCR's dedup)
-  # were rejecting our token. Fresh package names = fresh blob namespace.
-  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/overleaf-ce-base
   IMAGE_CE: ghcr.io/${{ github.repository_owner }}/overleaf-ce
+  # Pin to the base version matching CE 6.1.2 (base doesn't bump per CE patch).
+  OVERLEAF_BASE_TAG: docker.io/sharelatex/sharelatex-base:6.1.0
 
 permissions:
   contents: read
@@ -51,31 +50,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---- Base image (heavy: bullseye + perl + texlive bits etc.) ----
-      # type=gha cache instead of type=registry to dodge GHCR's blob-permission
-      # tangle around recreated packages. gha cache is stored in GitHub's
-      # Actions cache (scoped to this repo, 10GB quota) so it's also tidier.
-      - name: Build + push overleaf-base
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: server-ce/Dockerfile-base
-          push: true
-          tags: |
-            ${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}
-            ${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}
-          cache-from: type=gha,scope=overleaf-base
-          cache-to: type=gha,scope=overleaf-base,mode=max
-
-      # ---- Community Edition image (npm install + bundling) ----
-      - name: Build + push overleaf
+      # ---- Community Edition image (npm install + bundling on top of upstream base) ----
+      - name: Build + push overleaf-ce
         uses: docker/build-push-action@v6
         with:
           context: .
           file: server-ce/Dockerfile
           push: true
           build-args: |
-            OVERLEAF_BASE_TAG=${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}
+            OVERLEAF_BASE_TAG=${{ env.OVERLEAF_BASE_TAG }}
             MONOREPO_REVISION=${{ github.sha }}
             BRANCH_NAME=${{ github.ref_name }}
           tags: |
