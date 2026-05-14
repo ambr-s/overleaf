@@ -394,6 +394,17 @@ const _ProjectController = {
       userId = null
     }
 
+    // clsi-rs: fire-and-forget CLSI warmup. The user's per-user DO container
+    // takes ~800ms to cold-start; pinging it here means it's hot by the time
+    // they click Recompile. No await, no error handling — the ping reaching
+    // the network is enough to wake the container; we don't care about the
+    // response.
+    if (userId) {
+      const projectId = req.params.Project_id
+      const url = `${Settings.apis.clsi.url}/project/${projectId}/user/${userId}/status`
+      fetch(url).catch(() => {})
+    }
+
     if (Features.hasFeature('saas') && userId) {
       const { variant: domainCaptureRedirect } =
         await SplitTestHandler.promises.getAssignment(
