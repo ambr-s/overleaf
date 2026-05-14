@@ -8,6 +8,8 @@ import CompileManager from './CompileManager.mjs'
 import ClsiManager from './ClsiManager.mjs'
 import logger from '@overleaf/logger'
 import Settings from '@overleaf/settings'
+// clsi-rs: outputs live in R2; web 302s to presigned URLs (see _proxyToClsiWithLimits).
+import R2OutputClient from './R2OutputClient.mjs'
 import Errors from '../Errors/Errors.js'
 import SessionManager from '../Authentication/SessionManager.mjs'
 import { RateLimiter } from '../../infrastructure/RateLimiter.mjs'
@@ -521,6 +523,21 @@ const _CompileController = {
   },
 
   async _proxyToClsiWithLimits(projectId, action, url, qs, limits, req, res) {
+    // clsi-rs: short-circuit output file fetches by 302ing to a presigned R2
+    // URL so the browser pulls the PDF straight from Cloudflare's edge,
+    // bypassing the web -> clsi-proxy -> CF bytes-through chain.
+    if (action === 'output-file' && req.method === 'GET') {
+      try {
+        const r2Url = await R2OutputClient.maybePresignFromPath(url)
+        if (r2Url) {
+          Metrics.inc('proxy_to_clsi', 1, { path: action, status: 302 })
+          return res.redirect(302, r2Url)
+        }
+      } catch (err) {
+        Metrics.inc('proxy_to_clsi', 1, { path: action, status: 'r2-presign-err' })
+        logger.warn({ err, url }, 'R2 presign failed, falling back to proxy')
+      }
+    }
     const persistenceOptions = await _getPersistenceOptions(
       req,
       projectId,
