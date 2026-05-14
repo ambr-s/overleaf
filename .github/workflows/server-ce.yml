@@ -49,6 +49,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # ---- Base image (heavy: bullseye + perl + texlive bits etc.) ----
+      # type=gha cache instead of type=registry to dodge GHCR's blob-permission
+      # tangle around recreated packages. gha cache is stored in GitHub's
+      # Actions cache (scoped to this repo, 10GB quota) so it's also tidier.
       - name: Build + push overleaf-base
         uses: docker/build-push-action@v6
         with:
@@ -58,8 +61,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}
             ${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}-cache
-          cache-to: type=registry,ref=${{ env.IMAGE_BASE }}:${{ steps.tags.outputs.branch }}-cache,mode=max
+          cache-from: type=gha,scope=overleaf-base
+          cache-to: type=gha,scope=overleaf-base,mode=max
 
       # ---- Community Edition image (npm install + bundling) ----
       - name: Build + push overleaf
@@ -75,5 +78,5 @@ jobs:
           tags: |
             ${{ env.IMAGE_CE }}:${{ steps.tags.outputs.branch }}
             ${{ env.IMAGE_CE }}:${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}
-          cache-from: type=registry,ref=${{ env.IMAGE_CE }}:${{ steps.tags.outputs.branch }}-cache
-          cache-to: type=registry,ref=${{ env.IMAGE_CE }}:${{ steps.tags.outputs.branch }}-cache,mode=max
+          cache-from: type=gha,scope=overleaf-ce
+          cache-to: type=gha,scope=overleaf-ce,mode=max
