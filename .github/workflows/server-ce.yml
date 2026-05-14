@@ -16,8 +16,11 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/overleaf-base
-  IMAGE_CE: ghcr.io/${{ github.repository_owner }}/overleaf
+  # Renamed from overleaf-base/overleaf to dodge a GHCR blob-permission tangle:
+  # blobs from orphan packages (deleted but still referenced by GHCR's dedup)
+  # were rejecting our token. Fresh package names = fresh blob namespace.
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/overleaf-ce-base
+  IMAGE_CE: ghcr.io/${{ github.repository_owner }}/overleaf-ce
 
 permissions:
   contents: read
